@@ -17,7 +17,8 @@ _I think you are right._
     </tr>
     <tr>
         <td>zh-N</td>
-        <td>该用户的母语是中文。</td>
+        <td>现代标准汉语是该用户的母语。</br>
+Standard Modern Chinese is the user's native language.</td>
     </tr>
     <tr>
         <td>zh-Hani-3</td>
@@ -26,8 +27,8 @@ This user uses Simplified Chinese characters.</td>
     </tr>
     <tr>
         <td>ja-1</td>
-        <td>この利用者は初級の日本語ができます。</td>
-    </tr>
+        <td>この利用者は初級の日本語ができます。</br>
+This user has a very basic level of Japanese proficiency.</td>
 </table>  
 
 Email: **[furuochen.mail@gmail.com](mailto:furuochen.mail@gmail.com)**   
