@@ -1,0 +1,13 @@
+{
+    "name": "Automatically Upload",
+    "description": "Automatically upload to curseforge and/or modrinth",
+    "iconName": "octicon upload",
+    "categories": [
+        "continuous-integration"
+    ],
+    "filePatterns": [
+        "package.json$",
+        "^Dockerfile",
+        ".*\\.md$"
+    ]
+}
