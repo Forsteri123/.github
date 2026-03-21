@@ -1,3 +1,5 @@
 test
 
 <span style="color:green">green text</span>
+
+<code> code code </code>
