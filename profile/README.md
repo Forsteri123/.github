@@ -42,5 +42,5 @@ Modrinth: [Forsteri123](https://modrinth.com/user/Forsteri123)
 Youtube: [@forsteri123](https://www.youtube.com/channel/UCOZQMnGv2defCdyLgx_1uxQ)  
 BiliBili: [Forsteri123](https://space.bilibili.com/550418044)  
 
-<h3 align="left">Support:</h3>
-<p><a href="https://patreon.com/forsteri123"> <img align="left" src="https://github.com/Forsteri123/.github/blob/main/patron.png?raw=true" height="55" width="210" alt="https://patreon.com/forsteri123" /></a></p>
+### Support:
+Patreon: [forsteri123](https://patreon.com/forsteri123)
