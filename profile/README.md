@@ -18,7 +18,12 @@ _I think you are right._
     <tr>
         <td>zh-N</td>
         <td>现代标准汉语是该用户的母语。</br>
-Standard Modern Chinese is the user's native language.</td>
+Standard Modern Chinese is also this user's native language.</td>
+    </tr>
+    <tr>
+        <td>juai-N</td>
+        <td>江淮官话是该用户的母语。</br>
+Lower Yangtze Mandarin is also this user's native language.</td>
     </tr>
     <tr>
         <td>zh-Hani-3</td>
