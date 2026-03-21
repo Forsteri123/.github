@@ -1,1 +1,2 @@
 test
+<span style="color:green">green text</span>
