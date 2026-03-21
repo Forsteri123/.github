@@ -3,7 +3,7 @@
 <h1 align="center">Forsteri123</h1>
 <h3 align="center">Working on Minecraft Modding</h3>
 
-_I think you are right_
+_I think you are right._
 
 ### How to reach me:
 
