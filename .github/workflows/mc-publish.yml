@@ -15,10 +15,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect JDK
+        id: jdk
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA_VER=21
+          if [ -f gradle/wrapper/gradle-wrapper.properties ]; then
+            GW=$(grep -E '^distributionUrl=' gradle/wrapper/gradle-wrapper.properties | grep -oE 'gradle-[0-9]+\.[0-9]+' | head -n 1 | cut -d- -f2)
+            MAJOR=$(echo "$GW" | cut -d. -f1)
+            MINOR=$(echo "$GW" | cut -d. -f2)
+            if [ -n "$MAJOR" ] && { [ "$MAJOR" -lt 8 ] || { [ "$MAJOR" -eq 8 ] && [ "$MINOR" -lt 5 ]; }; }; then
+              JAVA_VER=17
+            fi
+            echo "Gradle wrapper ${GW:-unknown} -> Java ${JAVA_VER}"
+          else
+            echo "No Gradle wrapper found, defaulting to Java ${JAVA_VER}"
+          fi
+          echo "version=${JAVA_VER}" >> "$GITHUB_OUTPUT"
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: ${{ steps.jdk.outputs.version }}
           distribution: 'temurin'
 
       - name: Build Mod
