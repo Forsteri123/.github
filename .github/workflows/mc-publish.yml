@@ -22,11 +22,15 @@ jobs:
           distribution: 'temurin'
 
       - name: Build Mod
-        run: ./gradlew build
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build
 
       - name: Parse Metadata
         id: meta
         shell: bash
+        env:
+          CF_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
         run: |
           set -euo pipefail
           JAR_PATH=$(ls build/libs/*.jar | grep -v "\-sources" | grep -v "\-dev" | grep -v "\-slim" | head -n 1 || true)
@@ -52,18 +56,50 @@ jobs:
             FULL_VER="${MOD_VER}-${MC_VER}"
           fi
 
-          CF_VER_ID=$(curl -s -H "X-Api-Token: ${{ secrets.CURSEFORGE_TOKEN }}" https://minecraft.curseforge.com/api/game/versions | jq -r ".[] | select(.name == \"$MC_VER\") | .id" | head -n 1)
-          if [ -z "$CF_VER_ID" ]; then CF_VER_ID="10236"; fi
+          case "$LOADER" in
+            neoforge) CF_LOADER_NAME="NeoForge"; CF_LOADER_FALLBACK=10150 ;;
+            fabric)   CF_LOADER_NAME="Fabric";   CF_LOADER_FALLBACK=7499 ;;
+            quilt)    CF_LOADER_NAME="Quilt";    CF_LOADER_FALLBACK=9153 ;;
+            *)        CF_LOADER_NAME="Forge";    CF_LOADER_FALLBACK=7498 ;;
+          esac
+
+          CF_VERSIONS=$(curl -fsS -H "X-Api-Token: ${CF_TOKEN}" https://minecraft.curseforge.com/api/game/versions)
+          cf_id() {
+            echo "$CF_VERSIONS" | jq -r --arg n "$1" '[.[] | select(.name == $n)] | first | .id // empty'
+          }
+
+          CF_MC_ID=$(cf_id "$MC_VER")
+          if [ -z "$CF_MC_ID" ]; then
+            echo "Error: CurseForge has no game version named ${MC_VER}"
+            exit 1
+          fi
+
+          CF_CLIENT_ID=$(cf_id "Client")
+          CF_SERVER_ID=$(cf_id "Server")
+          CF_LOADER_ID=$(cf_id "$CF_LOADER_NAME")
+          : "${CF_CLIENT_ID:=9638}"
+          : "${CF_SERVER_ID:=9639}"
+          : "${CF_LOADER_ID:=$CF_LOADER_FALLBACK}"
+
+          CF_VER_IDS=$(jq -n --argjson mc "$CF_MC_ID" --argjson client "$CF_CLIENT_ID" --argjson server "$CF_SERVER_ID" --argjson loader "$CF_LOADER_ID" \
+            '[ $mc, $client, $server, $loader ]')
 
           echo "loader=$LOADER" >> "$GITHUB_OUTPUT"
-          echo "cf_ver_id=$CF_VER_ID" >> "$GITHUB_OUTPUT"
+          echo "cf_ver_ids=$CF_VER_IDS" >> "$GITHUB_OUTPUT"
           echo "mc_ver=$MC_VER" >> "$GITHUB_OUTPUT"
           echo "mod_ver=$MOD_VER" >> "$GITHUB_OUTPUT"
           echo "full_ver=$FULL_VER" >> "$GITHUB_OUTPUT"
           echo "display_name=${MC_VER} v${MOD_VER}" >> "$GITHUB_OUTPUT"
 
-          echo "Resolved jar=$JAR_PATH loader=$LOADER mc=$MC_VER mod=$MOD_VER full=$FULL_VER"
+          echo "Resolved jar=$JAR_PATH loader=$LOADER mc=$MC_VER mod=$MOD_VER full=$FULL_VER cf_versions=$CF_VER_IDS"
+
           echo "${{ github.event.head_commit.message }}" | sed '1d' > changelog.md
+          if [ ! -s changelog.md ]; then
+            git log --grep='^Bump version' --format='%B%x1e' | awk -v RS='\x1e' '/Fix #/ { print; exit }' | sed '1d' > changelog.md
+          fi
+          if [ ! -s changelog.md ]; then
+            echo "See commit history." > changelog.md
+          fi
 
       - name: Upload to CurseForge
         if: ${{ vars.CURSEFORGE_PROJECT != '' }}
@@ -71,9 +107,22 @@ jobs:
           CF_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
           CF_PROJECT: ${{ vars.CURSEFORGE_PROJECT }}
         run: |
-          METADATA=$(jq -n --arg cl "$(cat changelog.md)" --arg dn "${{ steps.meta.outputs.display_name }}" --arg v "${{ steps.meta.outputs.cf_ver_id }}" \
-            '{changelog: $cl, changelogType: "markdown", displayName: $dn, gameVersions: [$v | tonumber], releaseType: "release"}')
-          curl -X POST "https://minecraft.curseforge.com/api/projects/${CF_PROJECT}/upload-file" -H "X-Api-Token: ${CF_TOKEN}" -F "metadata=${METADATA}" -F "file=@${{ steps.meta.outputs.jar_path }}"
+          set -euo pipefail
+          METADATA=$(jq -n --arg cl "$(cat changelog.md)" --arg dn "${{ steps.meta.outputs.display_name }}" --argjson vs '${{ steps.meta.outputs.cf_ver_ids }}' \
+            '{changelog: $cl, changelogType: "markdown", displayName: $dn, gameVersions: $vs, releaseType: "release"}')
+          echo "CurseForge metadata=${METADATA}"
+          HTTP=$(curl -sS -o /tmp/cf-upload.json -w "%{http_code}" -X POST \
+            "https://minecraft.curseforge.com/api/projects/${CF_PROJECT}/upload-file" \
+            -H "X-Api-Token: ${CF_TOKEN}" \
+            -F "metadata=${METADATA}" \
+            -F "file=@${{ steps.meta.outputs.jar_path }}")
+          echo "CurseForge HTTP ${HTTP}"
+          cat /tmp/cf-upload.json
+          echo
+          if [ "$HTTP" -ge 400 ]; then
+            echo "CurseForge upload failed"
+            exit 1
+          fi
 
       - name: Upload to Modrinth
         if: ${{ vars.MODRINTH_PROJECT != '' }}
@@ -81,6 +130,24 @@ jobs:
           MR_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           MR_PROJECT: ${{ vars.MODRINTH_PROJECT }}
         run: |
-          METADATA=$(jq -n --arg name "${{ steps.meta.outputs.display_name }}" --arg ver "${{ steps.meta.outputs.full_ver }}" --arg cl "$(cat changelog.md)" --arg pid "${MR_PROJECT}" --arg mc "${{ steps.meta.outputs.mc_ver }}" --arg loader "${{ steps.meta.outputs.loader }}" \
+          set -euo pipefail
+          FULL_VER="${{ steps.meta.outputs.full_ver }}"
+          if curl -fsS "https://api.modrinth.com/v2/project/${MR_PROJECT}/version" \
+            | jq -e --arg v "$FULL_VER" 'any(.[]; .version_number == $v)' >/dev/null; then
+            echo "Modrinth already has ${FULL_VER}, skipping"
+            exit 0
+          fi
+          METADATA=$(jq -n --arg name "${{ steps.meta.outputs.display_name }}" --arg ver "$FULL_VER" --arg cl "$(cat changelog.md)" --arg pid "${MR_PROJECT}" --arg mc "${{ steps.meta.outputs.mc_ver }}" --arg loader "${{ steps.meta.outputs.loader }}" \
             '{name: $name, version_number: $ver, changelog: $cl, dependencies: [], featured: false, status: "listed", game_versions: [$mc], version_type: "release", loaders: [$loader], project_id: $pid, file_parts: ["file"]}')
-          curl -X POST "https://api.modrinth.com/v2/version" -H "Authorization: ${MR_TOKEN}" -F "data=${METADATA}" -F "file=@${{ steps.meta.outputs.jar_path }}"
+          HTTP=$(curl -sS -o /tmp/mr-upload.json -w "%{http_code}" -X POST \
+            "https://api.modrinth.com/v2/version" \
+            -H "Authorization: ${MR_TOKEN}" \
+            -F "data=${METADATA}" \
+            -F "file=@${{ steps.meta.outputs.jar_path }}")
+          echo "Modrinth HTTP ${HTTP}"
+          cat /tmp/mr-upload.json
+          echo
+          if [ "$HTTP" -ge 400 ]; then
+            echo "Modrinth upload failed"
+            exit 1
+          fi
