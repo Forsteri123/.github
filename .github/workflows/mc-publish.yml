@@ -49,6 +49,7 @@ jobs:
           if [ -z "$MC_VER" ]; then
             MC_VER=$(echo "$JAR_PATH" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | tail -n 1)
             MOD_VER=$(echo "$JAR_PATH" | sed "s/.*-\(.*\)-$MC_VER.jar/\1/")
+            FULL_VER="${MOD_VER}-${MC_VER}"
           fi
 
           CF_VER_ID=$(curl -s -H "X-Api-Token: ${{ secrets.CURSEFORGE_TOKEN }}" https://minecraft.curseforge.com/api/game/versions | jq -r ".[] | select(.name == \"$MC_VER\") | .id" | head -n 1)
@@ -58,9 +59,10 @@ jobs:
           echo "cf_ver_id=$CF_VER_ID" >> "$GITHUB_OUTPUT"
           echo "mc_ver=$MC_VER" >> "$GITHUB_OUTPUT"
           echo "mod_ver=$MOD_VER" >> "$GITHUB_OUTPUT"
+          echo "full_ver=$FULL_VER" >> "$GITHUB_OUTPUT"
           echo "display_name=${MC_VER} v${MOD_VER}" >> "$GITHUB_OUTPUT"
 
-          echo "Resolved jar=$JAR_PATH loader=$LOADER mc=$MC_VER mod=$MOD_VER"
+          echo "Resolved jar=$JAR_PATH loader=$LOADER mc=$MC_VER mod=$MOD_VER full=$FULL_VER"
           echo "${{ github.event.head_commit.message }}" | sed '1d' > changelog.md
 
       - name: Upload to CurseForge
@@ -79,6 +81,6 @@ jobs:
           MR_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           MR_PROJECT: ${{ vars.MODRINTH_PROJECT }}
         run: |
-          METADATA=$(jq -n --arg name "${{ steps.meta.outputs.display_name }}" --arg ver "${{ steps.meta.outputs.mod_ver }}" --arg cl "$(cat changelog.md)" --arg pid "${MR_PROJECT}" --arg mc "${{ steps.meta.outputs.mc_ver }}" --arg loader "${{ steps.meta.outputs.loader }}" \
+          METADATA=$(jq -n --arg name "${{ steps.meta.outputs.display_name }}" --arg ver "${{ steps.meta.outputs.full_ver }}" --arg cl "$(cat changelog.md)" --arg pid "${MR_PROJECT}" --arg mc "${{ steps.meta.outputs.mc_ver }}" --arg loader "${{ steps.meta.outputs.loader }}" \
             '{name: $name, version_number: $ver, changelog: $cl, dependencies: [], featured: false, status: "listed", game_versions: [$mc], version_type: "release", loaders: [$loader], project_id: $pid, file_parts: ["file"]}')
           curl -X POST "https://api.modrinth.com/v2/version" -H "Authorization: ${MR_TOKEN}" -F "data=${METADATA}" -F "file=@${{ steps.meta.outputs.jar_path }}"
