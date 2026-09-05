@@ -81,7 +81,7 @@ jobs:
           : "${CF_SERVER_ID:=9639}"
           : "${CF_LOADER_ID:=$CF_LOADER_FALLBACK}"
 
-          CF_VER_IDS=$(jq -n --argjson mc "$CF_MC_ID" --argjson client "$CF_CLIENT_ID" --argjson server "$CF_SERVER_ID" --argjson loader "$CF_LOADER_ID" \
+          CF_VER_IDS=$(jq -cn --argjson mc "$CF_MC_ID" --argjson client "$CF_CLIENT_ID" --argjson server "$CF_SERVER_ID" --argjson loader "$CF_LOADER_ID" \
             '[ $mc, $client, $server, $loader ]')
 
           echo "loader=$LOADER" >> "$GITHUB_OUTPUT"
